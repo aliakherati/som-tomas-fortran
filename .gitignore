@@ -1,0 +1,18 @@
+# Fortran build artifacts
+*.o
+*.mod
+*.exe
+src/*.o
+src/*.mod
+src/*.exe
+
+# Runtime outputs
+outputs/
+
+# macOS
+.DS_Store
+
+# Editor scratch
+*~
+*.swp
+*.swo

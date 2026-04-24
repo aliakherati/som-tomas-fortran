@@ -1,10 +1,13 @@
 # Fortran build artifacts
 *.o
-*.mod
 *.exe
 src/*.o
-src/*.mod
 src/*.exe
+
+# Gfortran module-interface files would be `<module>.mod`, but this codebase is
+# Fortran 77 and does not define any MODULEs. Anything matching the `.mod`
+# pattern here (notably saprc14_rev1.mod) is a SAPRC mechanism *data* file
+# that must be tracked so runs can open it. Do not add *.mod to this list.
 
 # Runtime outputs
 outputs/

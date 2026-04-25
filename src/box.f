@@ -135,13 +135,14 @@ CCC   AliA \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
       INTEGER, ALLOCATABLE :: INPC(:), INPO(:)
       INTEGER, ALLOCATABLE :: PRECLENNAME(:)
       
-      REAL, ALLOCATABLE :: SAPRCGC(:)
-      REAL, ALLOCATABLE :: IPPMPREC(:)
-      REAL, ALLOCATABLE :: IPPMOXY(:)      
+      REAL*8, ALLOCATABLE :: SAPRCGC(:)
+      REAL*8, ALLOCATABLE :: IPPMPREC(:)
+      REAL*8, ALLOCATABLE :: IPPMOXY(:)
       REAL, ALLOCATABLE :: DLVP(:)
-      REAL TEMP1, TIN, TOUT
+      REAL TEMP1
+      REAL*8 TIN, TOUT
       REAL GCREAL(IORG)
-      REAL CALVALREAL
+      REAL*8 CALVALREAL
       DOUBLE PRECISION CALVALDBLE
       DOUBLE PRECISION MWORG_HC(IORG)
 
@@ -804,17 +805,13 @@ C ----------------------------------------------------------------
             DO I=STRINX,NACT
                CALVALDBLE = GC(I-STRINX+SRTORG1) * 1.0E6 /
      &              PRES * R * TEMP / MWT(I+OFFSET)*1.0E3/BOXVOL*1.0e6 ! kg/bag -> g/m3 -> ppm
-C               print*, I-STRINX+1, I, 'SAPRGC=',
-C     &              SAPRCGC(I), 'CALVALDBLE=', CALVALDBLE
-               SAPRCGC(I) = REAL(CALVALDBLE)
+               SAPRCGC(I) = CALVALDBLE
             END DO
          ELSE
             DO I=STRINX,NACT
                CALVALDBLE = GC(I-STRINX+SRTORG1) * 1.0E6 /
      &              PRES * R * TEMP / MWT(I+OFFSET)*1.0E3/BOXVOL*1.0e6 ! kg/bag -> g/m3 -> ppm
-C               print*, I-STRINX+1, I, 'SAPRGC=',
-C     &              SAPRCGC(I), 'CALVALDBLE=', CALVALDBLE
-               SAPRCGC(I) = REAL(CALVALDBLE) + SAPRCGC(I)
+               SAPRCGC(I) = CALVALDBLE + SAPRCGC(I)
             END DO
          END IF
 
@@ -825,7 +822,7 @@ C     &              SAPRCGC(I), 'CALVALDBLE=', CALVALDBLE
          NEQNT = NACT
 
          call INTEGR2(TIN,TOUT,NEQNT,SAPRCGC,DIFF,
-     &        2.e-3, 1.0, 1.e-3, 0., 1.0E-30, 1.0e-09, 1, 5)
+     &        2.d-3, 1.0d0, 1.d-10, 0.d0, 1.0d-30, 1.0d-15, 1, 50)
          
          DO I=STRINX,NACT
             CALVALREAL = SAPRCGC(I) * 1.0E-6 * PRES/R/TEMP*

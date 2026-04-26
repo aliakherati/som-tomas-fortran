@@ -46,24 +46,29 @@ C     REVISED TO MAKE SMALL EFFICIENCY IMPROVEMENTS, AND TO MAKE THE
 C     CODE CLEARER AND MORE READABLE.  THE NUMERICAL CONSTANTS HAVE BEEN
 C     SET BACK TO VALUES RECOMMENDED BY YOUNG & BORIS.
 C
+C     REVISED 2026-04: working arrays + integration parameters promoted to
+C     REAL*8 so convergence criterion E3 can be pushed below the REAL*4
+C     ULP (~1e-7). Required for parity with double-precision JAX/diffrax
+C     ports of this chemistry.
+C
 C************************************************************************
       IMPLICIT NONE
 
       INCLUDE 'modlspc.h'
       INCLUDE 'common.inc'
-                                                                                
-      REAL
+
+      REAL*8
      &     C(nd2),                 ! SPECIES CONCENTRATIONS
      &     C2(nd2), C3(nd2),       ! ITERATIVE PREDICTIONS FOR C(T+DT)
      &     A(nd2), A2(nd2),        ! FORMATION RATES
      &     B(nd2), B2(nd2),        ! DEPLETION "RATE CONSTANTS"
      &     F(nd2), F2(nd2)         ! NET FORMATION, F = A - B*C
-      
+
       LOGICAL
      &     STIFF(nd2),             ! FLAG FOR STIFF EQUATIONS
      &     convg                   ! flag for convergence
-      
-      REAL
+
+      REAL*8
      &     TIN, TOUT, DTOVR2,      ! TIMES; START/CURRENT, STOP AND DT/2
      &     DT, DTMIN,              ! TIME STEP VARIABLES
      &     Y2, Y3, SUMTAU,         ! WORK VARIABLES
@@ -72,13 +77,13 @@ C************************************************************************
      &     XXX, TIN1, DT1, DTK2,
      &     ESUM1, ESUM2,
      &     E4R, EPS1
-                                                                                
+
       INTEGER
      &     J,k1,k2,k3,             ! LOOP CONTROL VARIABLES
      &     K4, NLAST,
      &     ITMIN, JFAIL,
      &     ITMAX                   ! MAX ITERATIONS BEFORE MODIFY DT
-                                                                                
+
 C***Control parameters for hybrid solution technique.************************
 C         E1 - Scaling factor to determine initial time step.
 C         E2 - Determines whether particular ODE falls into stiff
@@ -103,7 +108,7 @@ C     ITMAX  - If the integration has not converged after ITMAX corrections
 C              the time step is reduced.
 C
 C     ITMIN  - Must iterate at least itmin times to get optimal convegence.
-                                                                                
+
 C     *** REMEMBER THAT EVERY TIME DC IS CALLED, STEADY STATE / EQUILIBRIUM
 C         CONCENTRATIONS WILL BE UPDATED.***
 C
@@ -111,35 +116,35 @@ C***INITIALIZE VARIABLES***
       k2 = 0
       k3 = 0
       k4 = 0
-      dtk2 = 0.
+      dtk2 = 0.d0
       e4r = e4
-      dtmin = 1.0e-35
+      dtmin = 1.0d-100
       convg = .true.
       do j = 1,nlast
        IF (C(J) .LT. e5) C(J)=e5
       enddo
 C***COMPUTE INITIAL ESTIMATE FOR THE ARRAYS A, B, AND F***
       if(print4)print*,'calling diff with convg',convg,dt
-      dt = 1.e-10
+      dt = 1.d-10
 
       CALL DC(nlast, C, A, B, F, tin, dt, convg)
 
       k3 = k3 + 1
       if(flag1)return
-                                                                                
+
 C***COMPUTE INITIAL ESTIMATE FOR THE TIME STEP***
-      DT   =  10.0
-      XXX  =  10.0
+      DT   =  10.0d0
+      XXX  =  10.0d0
       DO 10 J = 1,nlast
-       IF (F(J) .NE. 0.0)THEN
+       IF (F(J) .NE. 0.0d0)THEN
         XXX = ABS(C(J)/F(J))
        ENDIF
-       if(b(j).gt.0.1) xxx = amin1(abs(1./b(j)),xxx)
-       IF (XXX .GT. 0.0)  DT = amin1(DT, XXX)
+       if(b(j).gt.0.1d0) xxx = min(abs(1.d0/b(j)),xxx)
+       IF (XXX .GT. 0.0d0)  DT = min(DT, XXX)
  10   CONTINUE
       DT = E1*DT
       IF (DT .LT. DTMIN)  DT = DTMIN
-                                                                                
+
 c***BEGINNING OF THE PREDICTOR/CORRECTOR LOOP***
  20   IF (tin+dt.gt.tout)dt=tout-tin
       if(dt.lt.dtmin)then
@@ -154,8 +159,8 @@ c***BEGINNING OF THE PREDICTOR/CORRECTOR LOOP***
        CALL DC(nlast,C, A, B, F, tin, dt, convg)
        stop 'integr: marker1'
       endif
-      DTOVR2 = DT*0.5
-      esum1 = 0.
+      DTOVR2 = DT*0.5d0
+      esum1 = 0.d0
       if(print4)then
         print*,'first step started at',tin,'with dt',dt,nlast
       endif
@@ -178,7 +183,7 @@ C***DETERMINE STIFF EQUATIONS AND PREDICT CONCENTRATION AT T+DT***
        STIFF(J) = (DT*B(J)).GT.E2
        IF (STIFF(J)) THEN
         xxx = exp(-dt*b(j))
-        c2(j) = a(j)/b(j)*(1-xxx) + c(j)*xxx
+        c2(j) = a(j)/b(j)*(1.d0-xxx) + c(j)*xxx
 c        TAU2  = 2.0/B(J)
 c        C2(J) = (C(J)*(TAU2-DT) + TAU2*DT*A(J)) / (TAU2+DT)
         nstiff = nstiff + 1
@@ -188,7 +193,7 @@ c        C2(J) = (C(J)*(TAU2-DT) + TAU2*DT*A(J)) / (TAU2+DT)
 c--reset negative concentrations--
        IF (C2(J) .LT. e5) C2(J)=e5
  40   CONTINUE
-                                                                                
+
 C***ITERATIVELY CORRECT THE PREDICTION FOR T+DT***
       k1 = 1                ! loop counter (< itmax)
 c--compute a, b and f using the latest values at t+dt--
@@ -201,20 +206,20 @@ c--compute a, b and f using the latest values at t+dt--
 
 c--correct the predictions for c(t+dt)--
        DO 60 J = 1,nlast
-        IF (.NOT.STIFF(J).OR.B2(J).LE.1.0E-30) THEN
+        IF (.NOT.STIFF(J).OR.B2(J).LE.1.0d-30) THEN
           C3(J) = C(J) + (F(J)+F2(J))*DTOVR2
         ELSE
-          SUMTAU = 1.0/B(J) + 1.0/B2(J)
-          xxx = exp(-2.*dt/sumtau)
-          c3(j) = (a(j) + a2(j))*sumtau/4.*(1.-xxx) + c(j)*xxx
+          SUMTAU = 1.0d0/B(J) + 1.0d0/B2(J)
+          xxx = exp(-2.0d0*dt/sumtau)
+          c3(j) = (a(j) + a2(j))*sumtau/4.0d0*(1.0d0-xxx) + c(j)*xxx
         ENDIF
 c--reset negative concentrations--
         IF (C3(J) .LT. e5) C3(J)=e5
  60   CONTINUE
-                                                                                
+
 c***TEST FOR CONVERGENCE AND CALCULATE EPS***
-      eps = 0.
-      esum1 = 0.
+      eps = 0.d0
+      esum1 = 0.d0
       jfail = 0
       do 70 j = 1,nlast
         Y2 = C2(J)
@@ -233,12 +238,12 @@ c--calculate the relative error and remember for time step manipulation--
       esum1 = esum1/e3
 c      write(6,*)'total sum of error',esum1
       if(k1.eq.1)eps1 = eps
-      if(eps.gt.1.01)then
+      if(eps.gt.1.01d0)then
        convg = .false.
       else
        convg = .true.
       endif
-                                                                                
+
 c--check the total number of convergence checks and start printing info--
       k4 = k4 + 1
       IF (K4.GE.1.5E6)then
@@ -251,7 +256,7 @@ c**SYSTEM DID NOT CONVERGE OR FAILURE FLAG SET********************************
        if(print4)then
         print*,'flag4 failure recognized with time step',dt
        endif
-       eps1 = amax1(eps1,1.5)
+       eps1 = max(eps1,1.5d0)
        call step2(eps1,dt)
        if(print4)then
         print*,'failure pattern recognized, time step reduced to',dt
@@ -269,9 +274,9 @@ c**SYSTEM DID NOT CONVERGE OR FAILURE FLAG SET********************************
        endif
        k2 = 0
 c--attempt to recognize failure pattern (reduce dt if pattern found)--
-       if(esum2.gt.0.)then
+       if(esum2.gt.0.d0)then
         xxx = esum1/esum2
-        if(xxx.gt.0.9)then
+        if(xxx.gt.0.9d0)then
          call step2(eps1,dt)
          if(print4)then
           print*,'failure pattern recognized, time step reduced to',dt
@@ -330,19 +335,19 @@ c--consider what to do if we have no failure but dt constant--
         k2 = k2 + 1
         if(k2.eq.1)dtk2 = dt
         if(k2.gt.100)then
-         if(dt.le.1.01*dtk2)then
-          if(e4r.gt.0.1)then
-           e4r = amin1(e4r,0.95)
+         if(dt.le.1.01d0*dtk2)then
+          if(e4r.gt.0.1d0)then
+           e4r = min(e4r,0.95d0)
           else
-           e4r = 0.95
+           e4r = 0.95d0
           endif
 c          if(print4)print*,'setting e4r based on k2',k2,e4r
          endif
          dtk2 = dt
         endif
 c--modify the stepsize and goto top of predictor/corrector loop--
-        eps = amax1(0.2,eps)
-        if(e4r.gt.0.1)eps = amin1(e4r,eps)
+        eps = max(0.2d0,eps)
+        if(e4r.gt.0.1d0)eps = min(e4r,eps)
         call step2(eps,dt)
         GO TO 20
        endif
@@ -373,29 +378,29 @@ c outputs
 c       dt     selected time step for integration
 c
 c****************************************************************************
- 
-      REAL xx1 , xx2 , yyy , Eps , Dt
+
+      REAL*8 xx1 , xx2 , yyy , Eps , Dt
       INTEGER icount
- 
+
 c--modify the value of eps when it is just > 1 to improve convergence--
-      IF ( Eps.GT.1.0 .AND. Eps.LE.1.1 ) THEN
+      IF ( Eps.GT.1.0d0 .AND. Eps.LE.1.1d0 ) THEN
          Eps = Eps**3
-      ELSEIF ( Eps.GT.1.1 .AND. Eps.LT.1.2 ) THEN
+      ELSEIF ( Eps.GT.1.1d0 .AND. Eps.LT.1.2d0 ) THEN
          Eps = Eps**2
       ENDIF
- 
+
 c--calculate new time step using Newton iteration--
       icount = 1
-      xx1 = 0.5*(Eps+1.0)
- 100  xx2 = 0.5*(xx1+Eps/xx1)
+      xx1 = 0.5d0*(Eps+1.0d0)
+ 100  xx2 = 0.5d0*(xx1+Eps/xx1)
       yyy = ABS(xx2-xx1)/xx2
-      IF ( yyy.GT.0.01 .AND. icount.LE.5 ) THEN
+      IF ( yyy.GT.0.01d0 .AND. icount.LE.5 ) THEN
          xx1 = xx2
          icount = icount + 1
          GOTO 100
       ENDIF
-      xx2 = MIN(xx2,1.E3)
-      Dt = Dt*(1./xx2)
-      Dt = MIN(Dt,5.)
+      xx2 = MIN(xx2,1.0d3)
+      Dt = Dt*(1.0d0/xx2)
+      Dt = MIN(Dt,5.0d0)
       END
- 
+
